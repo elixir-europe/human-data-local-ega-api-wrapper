@@ -987,13 +987,13 @@ public class EgaAPIWrapper {
                 org = ticket.substring(ticket.indexOf("?") + 1);
                 ticket = ticket.substring(0, ticket.indexOf("?"));
             }
-            
+
             // Setting up download resource
-            String urlstring = "", dServer = this.dataServer ;
+            String urlstring = "", dServer = this.dataServer;
             urlstring = "http://" + dServer + "/ega/rest/ds/v2/downloads/" + ticket;
             if (org!=null && org.length()>0) urlstring += "?org=" + org; // Mirroring?
             sb.append("URL: ").append(urlstring).append("\n");
-            
+
             // Set up incoming MD5 Digest
             MessageDigest md;
             md = MessageDigest.getInstance("MD5");
@@ -1003,33 +1003,44 @@ public class EgaAPIWrapper {
             if (verbose) System.out.println("Establishing Data Stream for " + ticket);
             sb.append("Establishing Data Stream for: ").append(ticket).append("\n");
             URL url = new URL(urlstring);
-            
+
             stage = 2; // Connect to URL
-            MyInputStreamResult xres = null;
-            try {
-                xres = connect(url);    // Try
-            } catch (Throwable th) {
-                System.out.println("Connection Throwable: " + (th!=null?th.toString():"null"));
-                if (xres!=null) {
-                    System.out.println("x result: " + xres.responseMessage + "  " + xres.responseCode);
-                }
+            if (verbose) {
+                System.out.println("Try connecting to " + urlstring);
             }
-            if (verbose) System.out.println("Connection Stream for " + ticket);
+            MyInputStreamResult xres = connect(url);    // Try
+
             stage = 21; // Connect to URL
-            if (xres.in_ == null) xres = connect(url);  // Re-try
-            if (xres.in_ == null) {                     // Re-try at backup
+            if (xres == null) {                         // Re-try
+                if (verbose) {
+                    System.out.println("Re-try connecting to " + urlstring);
+                }
+                xres = connect(url);
+            }
+            if (xres == null) {                     // Re-try at backup
                 dServer = this.backupDataServer;
                 urlstring = "http://" + dServer + "/ega/rest/ds/v2/downloads/" + ticket;
                 if (org!=null && org.length()>0) urlstring += "?org=" + org; // Mirroring?
+                if (verbose) {
+                    System.out.println("Try connecting to backup server: " + urlstring);
+                }
+                url = new URL(urlstring);
                 xres = connect(url);
             }
-            if (xres == null || xres.in_ == null) return new String[]{"Unable to establish download stream"};
+
+            if (xres == null) {
+                if (verbose) {
+                    System.out.println("Could not connect to resource URL for " + ticket);
+                }
+                return new String[]{"Could not connect to resource URL for " + ticket};
+            }
+
+            if (verbose) System.out.println("Connection Stream for " + ticket);
             InputStream in = xres.in_; // If input stream is still null, end download (after 3 tries)
-            if (in == null) return new String[]{"Could not connect to resource URL for " + ticket};
             DigestInputStream d_in = new DigestInputStream(in, md);
             if (verbose) System.out.println("Data Stream for " + ticket + " is established");
             sb.append("Data Stream for ").append(ticket).append(" is established").append("\n");
-            
+
             stage = 3; // Create local file
             OutputStream os = null;
             out = null;
@@ -1038,61 +1049,97 @@ public class EgaAPIWrapper {
                 if (this.dest_path!= null && this.dest_path.length() > 0)
                     down_path = this.dest_path + down_name;
                 if (down_path!=null) {
-                    out = new File(down_path);
-                    if (out.getParentFile()!=null)
-                        out.getParentFile().mkdirs();
-                    out.createNewFile();
+                    out = createNewFile(down_path);
                 }
-                if (out!=null) os = new FileOutputStream(out.getAbsolutePath() + ".egastream");
+                if (out!=null) {
+                    os = createNewFileOutputStream(out.getAbsolutePath() + ".egastream");
+                    if (os == null) {
+                        out.delete();
+                        out = null;
+                    } else if (verbose) { // File created successfully
+                        System.out.println("File Stream established for " + down_path + " (" + ticket + ")");
+                    }
+                }
 
-                if (os != null && out.exists()) { // File created successfully
-                    if (verbose) System.out.println("File Stream established for " + down_path + " (" + ticket + ")");
-                } else { // Error creating file - use ticket as file name in local dir
+                if (out == null || os == null) { // Error creating file - use ticket as file name in local dir
                     String backupPath = ticket + ".cip";
-                    out = new File(backupPath);
-                    os = new FileOutputStream(backupPath + ".egastream");
-                    
-                    if (os != null && verbose) System.out.println("File " + down_path + " could not be created. Using " + out.getAbsolutePath() + " instead.");
-                    if (os == null) return new String[]{"Could not create local file. Exiting download."};
+                    if (verbose) {
+                        System.out.println("Failed to create file " + down_path);
+                        System.out.println("Try creating backup file " + backupPath);
+                    }
+                    out = createNewFile(backupPath);
+                    if (out == null) {
+                        if (verbose) {
+                            System.out.println("Failed to create backup file " + backupPath);
+                        }
+                        if (xres != null && xres.urlConn != null) {
+                            xres.urlConn.disconnect();
+                        }
+                        return new String[]{"Could not create file. Exiting download."};
+                    }
+
+                    os = createNewFileOutputStream(backupPath + ".egastream");
+
+                    if (os == null) {
+                        if (verbose) {
+                            System.out.println("Failed to create backup file " + backupPath);
+                        }
+                        if (xres != null && xres.urlConn != null) {
+                            xres.urlConn.disconnect();
+                        }
+                        return new String[]{"Could not create file. Exiting download."};
+                    }
                 }
                 sb.append("Path: ").append(out.getAbsolutePath()).append("\n");
-                
+
             } else { // download to Null
                 // Nothing to do
                 if (verbose) System.out.println("Download to NULL");
                 sb.append("Download to NULL").append("\n");
             }
-            
-            stage = 4; // Data transfer loop            
+
+            stage = 4; // Data transfer loop
             int rd = 0;
             if (verbose) System.out.println("Starting transfer loop for " + ticket);
-            sb.append("Starting transfer loop for ").append(ticket).append(" (").append(d_in!=null).append(")\n");
+            sb.append("Starting transfer loop for ").append(ticket).append(" (").append(d_in != null).append(")\n");
             long t = System.currentTimeMillis(), tt = 0;
             byte[] buffer = new byte[128 * 1024];
-            while ( (rd = d_in.read(buffer)) > -1 ) {
-                if (os!=null) os.write(buffer, 0, rd);
-                tt+=rd;
-                if (System.currentTimeMillis()-t>5000 && verbose) {
-                    System.out.println("ticket " + ticket + " xferred: " + tt);
-                    t = System.currentTimeMillis();
+            try {
+                while ((rd = d_in.read(buffer)) > -1) {
+                    if (os != null) os.write(buffer, 0, rd);
+                    tt += rd;
+                    if (System.currentTimeMillis() - t > 5000 && verbose) {
+                        System.out.println("ticket " + ticket + " xferred: " + tt);
+                        t = System.currentTimeMillis();
+                    }
                 }
+            } catch (IOException e) {
+                System.out.println(e.toString());
+                if (os != null) {
+                    os.close();
+                }
+                d_in.close();
+                in.close();
+                if (xres.in_ != null) xres.in_.close();
+                if (xres.in_ != null) xres.urlConn.disconnect();
+                return new String[]{"Error while transferring data. Exiting download."};
             }
             if (verbose) System.out.println("Transfer loop for " + ticket + " completed.");
-            
+
             stage = 5; // Close streams
             if (os!=null) os.close();
             d_in.close();
             in.close();
             if (xres.in_!=null) xres.in_.close();
             if (xres.in_!=null) xres.urlConn.disconnect();
-                
-            stage = 6; // Get local MD5                
+
+            stage = 6; // Get local MD5
             byte[] digest = md.digest();
             BigInteger bigInt = new BigInteger(1,digest);
             String hashtext = bigInt.toString(16);
             while(hashtext.length() < 32 )
                 hashtext = "0"+hashtext;
-                
+
             stage = 7; // Get Server MD5
             if (ticket.contains("?")) ticket = ticket.substring(0, ticket.indexOf("?"));
             if (verbose) System.out.println("Getting Server MD5 for " + ticket);
@@ -1107,14 +1154,11 @@ public class EgaAPIWrapper {
                     xres_md5 = connect(new URL(url_));    // Try
                 } catch (Throwable th) {
                     System.out.println("Connection Throwable: " + (th!=null?th.toString():"null"));
-                    if (xres_md5!=null) {
-                        System.out.println("x result: " + xres_md5.responseMessage + "  " + xres_md5.responseCode);
-                    }
                 }
 
                 JSONObject jobj = null;
                 JSONArray jsonarr = null;
-                if (xres_md5.responseCode == 200) {
+                if (xres_md5 != null) {
                     BufferedReader reader = new BufferedReader(new InputStreamReader(xres_md5.in_));
                     String line = "";
                     while ( (line = reader.readLine()) != null) {
@@ -1125,11 +1169,16 @@ public class EgaAPIWrapper {
                         success = true;
                     }
                     reader.close();
+                    xres_md5.in_.close();
+                    xres_md5.urlConn.disconnect();
                 }
-                xres_md5.in_.close();
-                xres_md5.urlConn.disconnect();
             }
-            
+
+            if (!success) {
+                System.out.println("Could not verify file size with " + url_);
+                return new String[]{"Could not verify file size with " + url_};
+            }
+
             if (verbose) System.out.println("Received Server MD5 for " + ticket + ": " + serverLength);
 
             stage = 8; // Basic check: rename file if successful, delete otherwise
@@ -1162,10 +1211,56 @@ public class EgaAPIWrapper {
         return result;
     }
 
+    // Helper function - create a new file
+    private File createNewFile(String path) {
+        File out = new File(path);
+
+        if (out.getParentFile()!=null) {
+            try {
+                if ( !out.getParentFile().mkdirs() ) { // failure in creating directory
+                    System.out.println("Failed to create directory for " + out.getParentFile());
+                    return null;
+                }
+            } catch ( SecurityException e ) {
+                System.out.println(e.toString());
+                return null;
+            }
+        }
+
+        try {
+            if ( !out.createNewFile() ) { // failure in creating file
+                System.out.println("Failed to create file for " + path);
+                return null;
+            }
+        }
+        catch ( Throwable t ) {
+            System.out.println(t.toString());
+            return null;
+        }
+
+        if ( !out.exists() || !out.canWrite() ) {
+            return null;
+        }
+
+        return out;
+    }
+
+    // Helper function - create a new file output stream
+    private FileOutputStream createNewFileOutputStream(String path) {
+        try {
+            FileOutputStream fos = new FileOutputStream(path);
+            return fos;
+        }
+        catch ( Throwable t ) {
+            System.out.println(t.toString());
+        }
+
+        return null;
+    }
+
     // Helper function - establist a HttpURLConnection, return streams
     private MyInputStreamResult connect(URL url) {
         MyInputStreamResult x = new MyInputStreamResult();
-        x.in_ = null;
 
         try {
             if (verbose) System.out.println("Opening URL Connection");
@@ -1173,23 +1268,28 @@ public class EgaAPIWrapper {
             x.urlConn.setRequestProperty("Accept", "application/json");
             x.urlConn.setConnectTimeout(15000); // Wait 15 seconds for a connection 
             x.urlConn.setReadTimeout(1000 * 60 * 2); // 2 Minute Read Timeout
-            
-            x.responseCode = x.urlConn.getResponseCode();
-            if (verbose) System.out.println("Connection response code: " + x.responseCode);
-            x.responseMessage = x.urlConn.getResponseMessage();
-            if (x.responseCode==200)
+            int responseCode = x.urlConn.getResponseCode();
+            if (verbose) System.out.println("Connection response code: " + responseCode);
+            if (responseCode==200) {
                 x.in_ = x.urlConn.getInputStream();
                 //x.in_ = new MyBackgroundInputStream(x.urlConn.getInputStream());
-            
+                return x;
+            }
+
+            if ( verbose ) {
+                System.out.println(x.urlConn.getResponseMessage());
+            }
         } catch (SocketTimeoutException ex) {
-            x.responseCode = 998;
-            x.responseMessage = ex.getLocalizedMessage();
+            System.out.println(ex.toString());
         } catch (IOException ex) {
-            x.responseCode = 999;
-            x.responseMessage = ex.getLocalizedMessage();
+            System.out.println(ex.toString());
         }
-        
-        return x;
+
+        if ( x.urlConn != null ) {
+            x.urlConn.disconnect();
+        }
+
+        return null;
     }
 
     // REST call to delete a specified ticket - done after successful download

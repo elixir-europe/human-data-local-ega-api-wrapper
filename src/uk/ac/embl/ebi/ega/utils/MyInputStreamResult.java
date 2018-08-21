@@ -25,6 +25,4 @@ import java.net.HttpURLConnection;
 public class MyInputStreamResult {
     public HttpURLConnection urlConn;
     public InputStream in_;
-    public int responseCode;
-    public String responseMessage;    
 }
