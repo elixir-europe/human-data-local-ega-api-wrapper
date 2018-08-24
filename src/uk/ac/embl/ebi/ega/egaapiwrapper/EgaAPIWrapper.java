@@ -200,8 +200,8 @@ public class EgaAPIWrapper {
                     InetAddress address = (InetAddress) addresses.nextElement();
                     if(address instanceof Inet4Address) {
                         String ip = address.getHostAddress();
-                        if(!ip.equals(localhost) && this.verbose)
-                            System.out.println((res = ip));
+                        if(!ip.equals(localhost))
+                            log_output_if_verbose((res = ip));
                     }
                 }
             }
@@ -469,12 +469,12 @@ public class EgaAPIWrapper {
                 this.dest_path = path;
                 if (this.dest_path!= null && this.dest_path.length() > 0 && !this.dest_path.endsWith("/")) 
                     this.dest_path = this.dest_path + "/";
-                if (verbose) System.out.println("Path set to: " + testpath.getAbsolutePath());
+                log_output_if_verbose("Path set to: " + testpath.getAbsolutePath());
                 return true;
             }
         }
         this.dest_path = null;
-        if (verbose) System.out.println("Could not set path set to: " + path);
+        log_error_if_verbose("Could not set path set to: " + path);
         return false;
     }
     
@@ -918,7 +918,7 @@ public class EgaAPIWrapper {
         final int port = (dServer.contains(":"))?Integer.parseInt(dServer.substring(dServer.indexOf(":")+1)):80;
 
         // Prepare the HTTP request.
-        if (verbose) System.out.println("uri_string: " + urlstring);
+        log_output_if_verbose("uri_string: " + urlstring);
         HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, urlstring.trim());
         request.headers().set(HttpHeaderNames.HOST, dServer);
         request.headers().set(HttpHeaderNames.ACCEPT, HttpHeaderValues.APPLICATION_OCTET_STREAM);
@@ -971,12 +971,12 @@ public class EgaAPIWrapper {
             System.out.println("Error during Execution: " + ex.getLocalizedMessage());
         } finally {
             // Shut down the event loop to terminate all threads.
-            if (verbose) System.out.println("Shutting down " + (this.udt?"UDT":"TCP") + " Channel ticket " + ticket);
+            log_output_if_verbose("Shutting down " + (this.udt?"UDT":"TCP") + " Channel ticket " + ticket);
             connectGroup.shutdownGracefully();
             while (!connectGroup.isShutdown()) { // Wait
                 try {Thread.sleep(250);} catch (InterruptedException ex) {;}
             }
-            if (verbose) System.out.println("Shut down " + (this.udt?"UDT":"TCP") + " Channel ticket " + ticket + " Done!");
+            log_output_if_verbose("Shut down " + (this.udt?"UDT":"TCP") + " Channel ticket " + ticket + " Done!");
         }        
         System.gc(); // Just in case!
         
@@ -1020,14 +1020,12 @@ public class EgaAPIWrapper {
                 xres = connectWithRetry(url);
             }
             if (xres == null) {
-                if (verbose) {
-                    System.out.println("Could not connect to resource URL for " + ticket);
-                }
+                log_error_if_verbose("Could not connect to resource URL for " + ticket);
                 return new String[]{"Could not connect to resource URL for " + ticket};
             }
 
-            if (verbose) System.out.println("Connection Stream for " + ticket);
-            if (verbose) System.out.println("Data Stream for " + ticket + " is established");
+            log_output_if_verbose("Connection Stream for " + ticket);
+            log_output_if_verbose("Data Stream for " + ticket + " is established");
             sb.append("Data Stream for ").append(ticket).append(" is established").append("\n");
 
             stage = DownloadStage.CreatingLocalFile; // Create local file
@@ -1042,9 +1040,7 @@ public class EgaAPIWrapper {
 
                 if (out == null || os == null) { // Error creating file - use ticket as file name in local dir
                     String backupPath = ticket + ".cip";
-                    if (verbose) {
-                        System.out.println("Try creating backup file " + backupPath);
-                    }
+                    log_output_if_verbose("Try creating backup file " + backupPath);
                     os = createLocalFile(backupPath, ticket);
 
                     if (os == null) {
@@ -1058,12 +1054,12 @@ public class EgaAPIWrapper {
                 sb.append("Path: ").append(out.getAbsolutePath()).append("\n");
             } else { // download to Null
                 // Nothing to do
-                if (verbose) System.out.println("Download to NULL");
+                log_output_if_verbose("Download to NULL");
                 sb.append("Download to NULL").append("\n");
             }
 
             stage = DownloadStage.TrasferringData; // Data transfer loop
-            if (verbose) System.out.println("Starting transfer loop for " + ticket);
+            log_output_if_verbose("Starting transfer loop for " + ticket);
             InputStream in = xres.in_;
             DigestInputStream d_in = new DigestInputStream(in, md);
             sb.append("Starting transfer loop for ").append(ticket).append(" (").append(d_in != null).append(")\n");
@@ -1073,7 +1069,7 @@ public class EgaAPIWrapper {
                 if (xres.in_ != null) xres.urlConn.disconnect();
                 return new String[]{"Error while transferring data. Exiting download."};
             }
-            if (verbose) System.out.println("Transfer loop for " + ticket + " completed.");
+            log_output_if_verbose("Transfer loop for " + ticket + " completed.");
 
             stage = DownloadStage.ClosingConnection; // Close streams
             if (os!=null) os.close();
@@ -1087,13 +1083,13 @@ public class EgaAPIWrapper {
 
             stage = DownloadStage.GettingServerLength; // Get Server Length
             if (ticket.contains("?")) ticket = ticket.substring(0, ticket.indexOf("?"));
-            if (verbose) System.out.println("Getting Server MD5 for " + ticket);
+            log_output_if_verbose("Getting Server Length for " + ticket);
             String url_ = "http://" + dServer + "/ega/rest/ds/v2/results/" + ticket + "?md5="+hashtext;
             long serverLength = getServerLength(url_);
             if (serverLength < 0) {
                 return new String[]{"Could not verify file size with " + url_};
             }
-            if (verbose) System.out.println("Received Server Length for " + ticket + ": " + serverLength);
+            log_output_if_verbose("Received Server Length for " + ticket + ": " + serverLength);
 
             stage = DownloadStage.FinalCheck; // Basic check: rename file if successful, delete otherwise
             String[] checkResult = checkFileLength(out, ticket, serverLength);
@@ -1119,16 +1115,16 @@ public class EgaAPIWrapper {
         out.delete();
         String[] result = null;
         if (local.length() > 0 && local.length() == serverLength) {
-            if (verbose) System.out.println("Success! " + ticket);
-            if (verbose) System.out.println("Temp " + local.getCanonicalPath());
-            if (verbose) System.out.println("Final " + out.getCanonicalPath());
+            log_output_if_verbose("Success! " + ticket);
+            log_output_if_verbose("Temp " + local.getCanonicalPath());
+            log_output_if_verbose("Final " + out.getCanonicalPath());
             boolean renameTo = local.renameTo(out);
             result = new String[]{out.getCanonicalPath()};
-            if (verbose) System.out.println("saved and verified: " + result[0] + " for ticket " + ticket + " renamed: " + renameTo);
+            log_output_if_verbose("saved and verified: " + result[0] + " for ticket " + ticket + " renamed: " + renameTo);
         } else if (local.length() > 0 && serverLength == -1) {
-            if (verbose) System.out.println("MD5 check incomplete " + ticket + ". Please verify MD5 manually for: " + local.getAbsolutePath());
+            log_error_if_verbose("MD5 check incomplete " + ticket + ". Please verify MD5 manually for: " + local.getAbsolutePath());
         } else {
-            if (verbose) System.out.println("Failed " + ticket + ". Waiting, and re-try.");
+            log_error_if_verbose("Failed " + ticket + ". Waiting, and re-try.");
             local.delete();
         }
 
@@ -1214,11 +1210,9 @@ public class EgaAPIWrapper {
             if (os == null) {
                 out.delete();
                 out = null;
-                if (verbose) {
-                    System.out.println("Failed to create file " + path);
-                }
-            } else if (verbose) { // File created successfully
-                System.out.println("File Stream established for " + path + " (" + ticket + ")");
+                log_error_if_verbose("Failed to create file " + path);
+            } else { // File created successfully
+                log_output_if_verbose("File Stream established for " + path + " (" + ticket + ")");
             }
         }
 
@@ -1227,15 +1221,11 @@ public class EgaAPIWrapper {
 
     private MyInputStreamResult connectWithRetry(URL url) {
         String urlstring = url.toString();
-        if (verbose) {
-            System.out.println("Try connecting to " + urlstring);
-        }
+        log_output_if_verbose("Try connecting to " + urlstring);
         MyInputStreamResult xres = connect(url);    // Try
 
         if (xres == null) {                         // Re-try
-            if (verbose) {
-                System.out.println("Re-try connecting to " + urlstring);
-            }
+            log_output_if_verbose("Re-try connecting to " + urlstring);
             xres = connect(url);
         }
 
@@ -1249,7 +1239,7 @@ public class EgaAPIWrapper {
         if (org!=null && org.length()>0) urlstring += "?org=" + org; // Mirroring?
         sb.append("URL: ").append(urlstring).append("\n");
 
-        if (verbose) System.out.println("Establishing Data Stream for " + ticket);
+        log_output_if_verbose("Establishing Data Stream for " + ticket);
         sb.append("Establishing Data Stream for: ").append(ticket).append("\n");
         return new URL(urlstring);
     }
@@ -1306,22 +1296,20 @@ public class EgaAPIWrapper {
         MyInputStreamResult x = new MyInputStreamResult();
 
         try {
-            if (verbose) System.out.println("Opening URL Connection");
+            log_output_if_verbose("Opening URL Connection");
             x.urlConn = (HttpURLConnection) url.openConnection();//connect
             x.urlConn.setRequestProperty("Accept", "application/json");
             x.urlConn.setConnectTimeout(15000); // Wait 15 seconds for a connection 
             x.urlConn.setReadTimeout(1000 * 60 * 2); // 2 Minute Read Timeout
             int responseCode = x.urlConn.getResponseCode();
-            if (verbose) System.out.println("Connection response code: " + responseCode);
+            log_output_if_verbose("Connection response code: " + responseCode);
             if (responseCode==200) {
                 x.in_ = x.urlConn.getInputStream();
                 //x.in_ = new MyBackgroundInputStream(x.urlConn.getInputStream());
                 return x;
             }
 
-            if ( verbose ) {
-                System.out.println(x.urlConn.getResponseMessage());
-            }
+            log_error_if_verbose(x.urlConn.getResponseMessage());
         } catch (SocketTimeoutException ex) {
             System.out.println(ex.toString());
         } catch (IOException ex) {
@@ -1843,5 +1831,17 @@ public class EgaAPIWrapper {
         } catch (Throwable t) {;}
         
         return jsonarr;
+    }
+
+    private void log_error_if_verbose(String message) {
+        if ( verbose ) {
+            System.err.println(message);
+        }
+    }
+
+    private void log_output_if_verbose(String message) {
+        if ( verbose ) {
+            System.out.println(message);
+        }
     }
 }
