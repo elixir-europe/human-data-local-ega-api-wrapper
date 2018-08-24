@@ -113,6 +113,19 @@ public class EgaAPIWrapper {
     
     // Decide between two download options for TCP: 'normal' and 'alternative'
     private boolean alt = false;
+
+    private enum DownloadStage {
+        Starting,
+        CreatingURL,
+        Connecting,
+        Reconnecting,
+        CreatingLocalFile,
+        TrasferringData,
+        ClosingConnection,
+        CalculatingLocalMD5,
+        GettingServerMD5,
+        FinalCheck
+    };
     
     public EgaAPIWrapper(String infoServer, String dataServer, boolean ssl,
                          String globusServer, String globusPrefix) {
@@ -980,7 +993,7 @@ public class EgaAPIWrapper {
         StringBuilder sb = new StringBuilder();
         sb.append("Ticket: ").append(ticket).append("\n");
         
-        int stage = 0;
+        DownloadStage stage = DownloadStage.Starting;
         File out = null;
         try {
             if (ticket.contains("?")) { // Standardise ticket format
@@ -999,18 +1012,18 @@ public class EgaAPIWrapper {
             md = MessageDigest.getInstance("MD5");
 
             // Make connection
-            stage = 1; // Create URL
+            stage = DownloadStage.CreatingURL; // Create URL
             if (verbose) System.out.println("Establishing Data Stream for " + ticket);
             sb.append("Establishing Data Stream for: ").append(ticket).append("\n");
             URL url = new URL(urlstring);
 
-            stage = 2; // Connect to URL
+            stage = DownloadStage.Connecting; // Connect to URL
             if (verbose) {
                 System.out.println("Try connecting to " + urlstring);
             }
             MyInputStreamResult xres = connect(url);    // Try
 
-            stage = 21; // Connect to URL
+            stage = DownloadStage.Reconnecting; // Re-connect to URL
             if (xres == null) {                         // Re-try
                 if (verbose) {
                     System.out.println("Re-try connecting to " + urlstring);
@@ -1041,7 +1054,7 @@ public class EgaAPIWrapper {
             if (verbose) System.out.println("Data Stream for " + ticket + " is established");
             sb.append("Data Stream for ").append(ticket).append(" is established").append("\n");
 
-            stage = 3; // Create local file
+            stage = DownloadStage.CreatingLocalFile; // Create local file
             OutputStream os = null;
             out = null;
             if (down_name != null && !down_name.equalsIgnoreCase("null")) { // A file is specified
@@ -1098,7 +1111,7 @@ public class EgaAPIWrapper {
                 sb.append("Download to NULL").append("\n");
             }
 
-            stage = 4; // Data transfer loop
+            stage = DownloadStage.TrasferringData; // Data transfer loop
             int rd = 0;
             if (verbose) System.out.println("Starting transfer loop for " + ticket);
             sb.append("Starting transfer loop for ").append(ticket).append(" (").append(d_in != null).append(")\n");
@@ -1126,21 +1139,21 @@ public class EgaAPIWrapper {
             }
             if (verbose) System.out.println("Transfer loop for " + ticket + " completed.");
 
-            stage = 5; // Close streams
+            stage = DownloadStage.ClosingConnection; // Close streams
             if (os!=null) os.close();
             d_in.close();
             in.close();
             if (xres.in_!=null) xres.in_.close();
             if (xres.in_!=null) xres.urlConn.disconnect();
 
-            stage = 6; // Get local MD5
+            stage = DownloadStage.CalculatingLocalMD5; // Get local MD5
             byte[] digest = md.digest();
             BigInteger bigInt = new BigInteger(1,digest);
             String hashtext = bigInt.toString(16);
             while(hashtext.length() < 32 )
                 hashtext = "0"+hashtext;
 
-            stage = 7; // Get Server MD5
+            stage = DownloadStage.GettingServerMD5; // Get Server MD5
             if (ticket.contains("?")) ticket = ticket.substring(0, ticket.indexOf("?"));
             if (verbose) System.out.println("Getting Server MD5 for " + ticket);
             String url_ = "http://" + dServer + "/ega/rest/ds/v2/results/" + ticket + "?md5="+hashtext;
@@ -1181,7 +1194,7 @@ public class EgaAPIWrapper {
 
             if (verbose) System.out.println("Received Server MD5 for " + ticket + ": " + serverLength);
 
-            stage = 8; // Basic check: rename file if successful, delete otherwise
+            stage = DownloadStage.FinalCheck; // Basic check: rename file if successful, delete otherwise
             File local = new File(out.getAbsolutePath() + ".egastream");
             out.delete();
             if (local.length() > 0 && local.length() == serverLength) {
@@ -1199,7 +1212,7 @@ public class EgaAPIWrapper {
             }
         } catch (Throwable ex) {
             System.out.println("Output: " + sb.toString());
-            System.out.println("Download Error occurred at Stage " + stage);
+            System.out.println("Download Error occurred at Stage " + stage.name());
             System.out.println("Error: " + ((ex!=null)?ex.getLocalizedMessage():"null"));
             if (out!=null) {
                 File out_temp = new File(out.getAbsolutePath() + ".egastream");
