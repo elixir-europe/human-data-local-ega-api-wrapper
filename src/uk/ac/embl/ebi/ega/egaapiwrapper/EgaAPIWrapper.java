@@ -47,6 +47,7 @@ import java.math.BigInteger;
 import java.net.HttpURLConnection;
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.MalformedURLException;
 import java.net.NetworkInterface;
 import java.net.SocketTimeoutException;
 import java.net.URL;
@@ -92,7 +93,9 @@ public class EgaAPIWrapper {
     private String globusServer = "EGA-globus-server.ebi.ac.uk:8113";
     
     // Connection/Session Information
-    private String informationServer = null, dataServer = null, backupDataServer = null;
+    private String informationServer = null;
+    private String dataServer = null;
+    private String backupDataServer = null;
     private String dest_path;
     private boolean udt = false;
     private boolean ssl = false;
@@ -118,12 +121,11 @@ public class EgaAPIWrapper {
         Starting,
         CreatingURL,
         Connecting,
-        Reconnecting,
         CreatingLocalFile,
         TrasferringData,
         ClosingConnection,
         CalculatingLocalMD5,
-        GettingServerMD5,
+        GettingServerLength,
         FinalCheck
     };
     
@@ -1001,46 +1003,22 @@ public class EgaAPIWrapper {
                 ticket = ticket.substring(0, ticket.indexOf("?"));
             }
 
-            // Setting up download resource
-            String urlstring = "", dServer = this.dataServer;
-            urlstring = "http://" + dServer + "/ega/rest/ds/v2/downloads/" + ticket;
-            if (org!=null && org.length()>0) urlstring += "?org=" + org; // Mirroring?
-            sb.append("URL: ").append(urlstring).append("\n");
-
             // Set up incoming MD5 Digest
             MessageDigest md;
             md = MessageDigest.getInstance("MD5");
 
-            // Make connection
             stage = DownloadStage.CreatingURL; // Create URL
-            if (verbose) System.out.println("Establishing Data Stream for " + ticket);
-            sb.append("Establishing Data Stream for: ").append(ticket).append("\n");
-            URL url = new URL(urlstring);
+            String dServer = this.dataServer;
+            URL url = createUrl(dServer, ticket, org, sb);
 
+            // Make connection
             stage = DownloadStage.Connecting; // Connect to URL
-            if (verbose) {
-                System.out.println("Try connecting to " + urlstring);
-            }
-            MyInputStreamResult xres = connect(url);    // Try
-
-            stage = DownloadStage.Reconnecting; // Re-connect to URL
-            if (xres == null) {                         // Re-try
-                if (verbose) {
-                    System.out.println("Re-try connecting to " + urlstring);
-                }
-                xres = connect(url);
-            }
-            if (xres == null) {                     // Re-try at backup
+            MyInputStreamResult xres = connectWithRetry(url);
+            if ( xres == null ) { // Connect to backup server
                 dServer = this.backupDataServer;
-                urlstring = "http://" + dServer + "/ega/rest/ds/v2/downloads/" + ticket;
-                if (org!=null && org.length()>0) urlstring += "?org=" + org; // Mirroring?
-                if (verbose) {
-                    System.out.println("Try connecting to backup server: " + urlstring);
-                }
-                url = new URL(urlstring);
-                xres = connect(url);
+                url = createUrl(dServer, ticket, org, sb);
+                xres = connectWithRetry(url);
             }
-
             if (xres == null) {
                 if (verbose) {
                     System.out.println("Could not connect to resource URL for " + ticket);
@@ -1049,8 +1027,6 @@ public class EgaAPIWrapper {
             }
 
             if (verbose) System.out.println("Connection Stream for " + ticket);
-            InputStream in = xres.in_; // If input stream is still null, end download (after 3 tries)
-            DigestInputStream d_in = new DigestInputStream(in, md);
             if (verbose) System.out.println("Data Stream for " + ticket + " is established");
             sb.append("Data Stream for ").append(ticket).append(" is established").append("\n");
 
@@ -1061,50 +1037,25 @@ public class EgaAPIWrapper {
                 String down_path = down_name;
                 if (this.dest_path!= null && this.dest_path.length() > 0)
                     down_path = this.dest_path + down_name;
-                if (down_path!=null) {
-                    out = createNewFile(down_path);
-                }
-                if (out!=null) {
-                    os = createNewFileOutputStream(out.getAbsolutePath() + ".egastream");
-                    if (os == null) {
-                        out.delete();
-                        out = null;
-                    } else if (verbose) { // File created successfully
-                        System.out.println("File Stream established for " + down_path + " (" + ticket + ")");
-                    }
-                }
+                os = createLocalFile(down_path, ticket);
+                out = new File(down_path);
 
                 if (out == null || os == null) { // Error creating file - use ticket as file name in local dir
                     String backupPath = ticket + ".cip";
                     if (verbose) {
-                        System.out.println("Failed to create file " + down_path);
                         System.out.println("Try creating backup file " + backupPath);
                     }
-                    out = createNewFile(backupPath);
-                    if (out == null) {
-                        if (verbose) {
-                            System.out.println("Failed to create backup file " + backupPath);
-                        }
-                        if (xres != null && xres.urlConn != null) {
-                            xres.urlConn.disconnect();
-                        }
-                        return new String[]{"Could not create file. Exiting download."};
-                    }
-
-                    os = createNewFileOutputStream(backupPath + ".egastream");
+                    os = createLocalFile(backupPath, ticket);
 
                     if (os == null) {
-                        if (verbose) {
-                            System.out.println("Failed to create backup file " + backupPath);
-                        }
                         if (xres != null && xres.urlConn != null) {
                             xres.urlConn.disconnect();
                         }
                         return new String[]{"Could not create file. Exiting download."};
                     }
+                    out = new File(backupPath);
                 }
                 sb.append("Path: ").append(out.getAbsolutePath()).append("\n");
-
             } else { // download to Null
                 // Nothing to do
                 if (verbose) System.out.println("Download to NULL");
@@ -1112,27 +1063,12 @@ public class EgaAPIWrapper {
             }
 
             stage = DownloadStage.TrasferringData; // Data transfer loop
-            int rd = 0;
             if (verbose) System.out.println("Starting transfer loop for " + ticket);
+            InputStream in = xres.in_;
+            DigestInputStream d_in = new DigestInputStream(in, md);
             sb.append("Starting transfer loop for ").append(ticket).append(" (").append(d_in != null).append(")\n");
-            long t = System.currentTimeMillis(), tt = 0;
-            byte[] buffer = new byte[128 * 1024];
-            try {
-                while ((rd = d_in.read(buffer)) > -1) {
-                    if (os != null) os.write(buffer, 0, rd);
-                    tt += rd;
-                    if (System.currentTimeMillis() - t > 5000 && verbose) {
-                        System.out.println("ticket " + ticket + " xferred: " + tt);
-                        t = System.currentTimeMillis();
-                    }
-                }
-            } catch (IOException e) {
-                System.out.println(e.toString());
-                if (os != null) {
-                    os.close();
-                }
+            if ( !transferData(d_in, os, ticket) ) {
                 d_in.close();
-                in.close();
                 if (xres.in_ != null) xres.in_.close();
                 if (xres.in_ != null) xres.urlConn.disconnect();
                 return new String[]{"Error while transferring data. Exiting download."};
@@ -1147,68 +1083,22 @@ public class EgaAPIWrapper {
             if (xres.in_!=null) xres.urlConn.disconnect();
 
             stage = DownloadStage.CalculatingLocalMD5; // Get local MD5
-            byte[] digest = md.digest();
-            BigInteger bigInt = new BigInteger(1,digest);
-            String hashtext = bigInt.toString(16);
-            while(hashtext.length() < 32 )
-                hashtext = "0"+hashtext;
+            String hashtext = calculateLocalMD5(md);
 
-            stage = DownloadStage.GettingServerMD5; // Get Server MD5
+            stage = DownloadStage.GettingServerLength; // Get Server Length
             if (ticket.contains("?")) ticket = ticket.substring(0, ticket.indexOf("?"));
             if (verbose) System.out.println("Getting Server MD5 for " + ticket);
             String url_ = "http://" + dServer + "/ega/rest/ds/v2/results/" + ticket + "?md5="+hashtext;
-
-            MyInputStreamResult xres_md5 = null;
-            long serverLength = -1;
-            int countDown = 3;
-            boolean success = false;
-            while (!success && countDown-- > 0) {
-                try {
-                    xres_md5 = connect(new URL(url_));    // Try
-                } catch (Throwable th) {
-                    System.out.println("Connection Throwable: " + (th!=null?th.toString():"null"));
-                }
-
-                JSONObject jobj = null;
-                JSONArray jsonarr = null;
-                if (xres_md5 != null) {
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(xres_md5.in_));
-                    String line = "";
-                    while ( (line = reader.readLine()) != null) {
-                        jobj = new JSONObject(line);
-                        JSONObject j = jobj.getJSONObject("response");
-                        jsonarr = (JSONArray)j.get("result");
-                        serverLength = Long.parseLong(jsonarr.getString(1));
-                        success = true;
-                    }
-                    reader.close();
-                    xres_md5.in_.close();
-                    xres_md5.urlConn.disconnect();
-                }
-            }
-
-            if (!success) {
-                System.out.println("Could not verify file size with " + url_);
+            long serverLength = getServerLength(url_);
+            if (serverLength < 0) {
                 return new String[]{"Could not verify file size with " + url_};
             }
-
-            if (verbose) System.out.println("Received Server MD5 for " + ticket + ": " + serverLength);
+            if (verbose) System.out.println("Received Server Length for " + ticket + ": " + serverLength);
 
             stage = DownloadStage.FinalCheck; // Basic check: rename file if successful, delete otherwise
-            File local = new File(out.getAbsolutePath() + ".egastream");
-            out.delete();
-            if (local.length() > 0 && local.length() == serverLength) {
-                if (verbose) System.out.println("Success! " + ticket);
-                if (verbose) System.out.println("Temp " + local.getCanonicalPath());
-                if (verbose) System.out.println("Final " + out.getCanonicalPath());
-                boolean renameTo = local.renameTo(out);
-                result = new String[]{out.getCanonicalPath()};
-                if (verbose) System.out.println("saved and verified: " + result[0] + " for ticket " + ticket + " renamed: " + renameTo);
-            } else if (local.length() > 0 && serverLength == -1) {
-                if (verbose) System.out.println("MD5 check incomplete " + ticket + ". Please verify MD5 manually for: " + local.getAbsolutePath());
-            } else {
-                if (verbose) System.out.println("Failed " + ticket + ". Waiting, and re-try.");
-                local.delete();
+            String[] checkResult = checkFileLength(out, ticket, serverLength);
+            if ( checkResult != null ) {
+                result = checkResult;
             }
         } catch (Throwable ex) {
             System.out.println("Output: " + sb.toString());
@@ -1222,6 +1112,146 @@ public class EgaAPIWrapper {
         }
         
         return result;
+    }
+
+    private String[] checkFileLength(File out, String ticket, long serverLength) throws Throwable {
+        File local = new File(out.getAbsolutePath() + ".egastream");
+        out.delete();
+        String[] result = null;
+        if (local.length() > 0 && local.length() == serverLength) {
+            if (verbose) System.out.println("Success! " + ticket);
+            if (verbose) System.out.println("Temp " + local.getCanonicalPath());
+            if (verbose) System.out.println("Final " + out.getCanonicalPath());
+            boolean renameTo = local.renameTo(out);
+            result = new String[]{out.getCanonicalPath()};
+            if (verbose) System.out.println("saved and verified: " + result[0] + " for ticket " + ticket + " renamed: " + renameTo);
+        } else if (local.length() > 0 && serverLength == -1) {
+            if (verbose) System.out.println("MD5 check incomplete " + ticket + ". Please verify MD5 manually for: " + local.getAbsolutePath());
+        } else {
+            if (verbose) System.out.println("Failed " + ticket + ". Waiting, and re-try.");
+            local.delete();
+        }
+
+        return result;
+    }
+
+    private long getServerLength(String url) throws Throwable {
+        long serverLength = -1;
+        int countDown = 3;
+        boolean success = false;
+        while (!success && countDown-- > 0) {
+            MyInputStreamResult xres_md5 = connect(new URL(url));
+            JSONObject jobj = null;
+            JSONArray jsonarr = null;
+            if (xres_md5 != null) {
+                BufferedReader reader = new BufferedReader(new InputStreamReader(xres_md5.in_));
+                String line = "";
+                while ( (line = reader.readLine()) != null) {
+                    jobj = new JSONObject(line);
+                    JSONObject j = jobj.getJSONObject("response");
+                    jsonarr = (JSONArray)j.get("result");
+                    serverLength = Long.parseLong(jsonarr.getString(1));
+                    success = true;
+                }
+                reader.close();
+                xres_md5.in_.close();
+                xres_md5.urlConn.disconnect();
+            }
+        }
+
+        if (!success) {
+            System.out.println("Could not verify file size with " + url);
+        }
+
+        return serverLength;
+    }
+
+    private String calculateLocalMD5(MessageDigest md) {
+        byte[] digest = md.digest();
+        BigInteger bigInt = new BigInteger(1,digest);
+        String hashtext = bigInt.toString(16);
+        while(hashtext.length() < 32 )
+            hashtext = "0"+hashtext;
+
+        return hashtext;
+    }
+
+    private boolean transferData(DigestInputStream d_in, OutputStream os, String ticket)
+            throws IOException {
+        int rd = 0;
+        long t = System.currentTimeMillis(), tt = 0;
+        byte[] buffer = new byte[128 * 1024];
+        try {
+            while ((rd = d_in.read(buffer)) > -1) {
+                if (os != null) os.write(buffer, 0, rd);
+                tt += rd;
+                if (System.currentTimeMillis() - t > 5000 && verbose) {
+                    System.out.println("ticket " + ticket + " xferred: " + tt);
+                    t = System.currentTimeMillis();
+                }
+            }
+        } catch (IOException e) {
+            System.out.println(e.toString());
+            if (os != null) {
+                os.close();
+            }
+            d_in.close();
+            return false;
+        }
+
+        return true;
+    }
+
+    private OutputStream createLocalFile(String path, String ticket) {
+        File out = null;
+        OutputStream os = null;
+        if ( path != null ) {
+            out = createNewFile(path);
+        }
+
+        if (out!=null) {
+            os = createNewFileOutputStream(out.getAbsolutePath() + ".egastream");
+            if (os == null) {
+                out.delete();
+                out = null;
+                if (verbose) {
+                    System.out.println("Failed to create file " + path);
+                }
+            } else if (verbose) { // File created successfully
+                System.out.println("File Stream established for " + path + " (" + ticket + ")");
+            }
+        }
+
+        return os;
+    }
+
+    private MyInputStreamResult connectWithRetry(URL url) {
+        String urlstring = url.toString();
+        if (verbose) {
+            System.out.println("Try connecting to " + urlstring);
+        }
+        MyInputStreamResult xres = connect(url);    // Try
+
+        if (xres == null) {                         // Re-try
+            if (verbose) {
+                System.out.println("Re-try connecting to " + urlstring);
+            }
+            xres = connect(url);
+        }
+
+        return xres;
+    }
+
+    private URL createUrl(String dataServer, String ticket, String org, StringBuilder sb)
+            throws MalformedURLException {
+        String urlstring = "";
+        urlstring = "http://" + dataServer + "/ega/rest/ds/v2/downloads/" + ticket;
+        if (org!=null && org.length()>0) urlstring += "?org=" + org; // Mirroring?
+        sb.append("URL: ").append(urlstring).append("\n");
+
+        if (verbose) System.out.println("Establishing Data Stream for " + ticket);
+        sb.append("Establishing Data Stream for: ").append(ticket).append("\n");
+        return new URL(urlstring);
     }
 
     // Helper function - create a new file
