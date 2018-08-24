@@ -300,7 +300,7 @@ public class EgaAPIWrapper {
             } catch (Exception ex) {
                 this.session = false;
                 this.sessionId = null;
-                if (verbose) System.out.println("Exception: " + ex.toString());
+                if (verbose) System.err.println("Exception: " + ex.toString());
             }
         }
     }
@@ -409,7 +409,7 @@ public class EgaAPIWrapper {
 
             System.out.println("Result Length (always 1): " + jsonarr2.length());            
         } catch (Throwable t) {
-            System.out.println(t.toString());
+            System.err.println(t.toString());
         }
         
         return result;
@@ -530,7 +530,7 @@ public class EgaAPIWrapper {
                     result = new String[]{"Session timed out."};
                 }
             } catch (Exception ex) {
-                System.out.println("(TEST) Error: " + ex.getLocalizedMessage());
+                System.err.println("(TEST) Error: " + ex.getLocalizedMessage());
             }
 
             if (result!=null)
@@ -570,7 +570,7 @@ public class EgaAPIWrapper {
                         }
                     }
                 } else {
-                    System.out.println("REST Call result Null");
+                    System.err.println("REST Call result Null");
                     //this.session = false;
                     result = null;
                 }
@@ -801,7 +801,7 @@ public class EgaAPIWrapper {
                         result[i] = jsonarr.getString(i);
                 }                        
             } catch (Exception ex) {
-                System.out.println(ex.getMessage());
+                System.err.println(ex.getMessage());
             }
 
             if (result!=null)
@@ -968,7 +968,7 @@ public class EgaAPIWrapper {
             f.channel().closeFuture().sync();            
         } catch (InterruptedException ex) {
             // Error during execution
-            System.out.println("Error during Execution: " + ex.getLocalizedMessage());
+            System.err.println("Error during Execution: " + ex.getLocalizedMessage());
         } finally {
             // Shut down the event loop to terminate all threads.
             log_output_if_verbose("Shutting down " + (this.udt?"UDT":"TCP") + " Channel ticket " + ticket);
@@ -1097,9 +1097,9 @@ public class EgaAPIWrapper {
                 result = checkResult;
             }
         } catch (Throwable ex) {
-            System.out.println("Output: " + sb.toString());
-            System.out.println("Download Error occurred at Stage " + stage.name());
-            System.out.println("Error: " + ((ex!=null)?ex.getLocalizedMessage():"null"));
+            System.err.println("Output: " + sb.toString());
+            System.err.println("Download Error occurred at Stage " + stage.name());
+            System.err.println("Error: " + ((ex!=null)?ex.getLocalizedMessage():"null"));
             if (out!=null) {
                 File out_temp = new File(out.getAbsolutePath() + ".egastream");
                 out_temp.delete();
@@ -1156,7 +1156,7 @@ public class EgaAPIWrapper {
         }
 
         if (!success) {
-            System.out.println("Could not verify file size with " + url);
+            System.err.println("Could not verify file size with " + url);
         }
 
         return serverLength;
@@ -1187,7 +1187,7 @@ public class EgaAPIWrapper {
                 }
             }
         } catch (IOException e) {
-            System.out.println(e.toString());
+            System.err.println(e.toString());
             if (os != null) {
                 os.close();
             }
@@ -1251,23 +1251,23 @@ public class EgaAPIWrapper {
         if (out.getParentFile()!=null) {
             try {
                 if ( !out.getParentFile().mkdirs() ) { // failure in creating directory
-                    System.out.println("Failed to create directory for " + out.getParentFile());
+                    System.err.println("Failed to create directory for " + out.getParentFile());
                     return null;
                 }
             } catch ( SecurityException e ) {
-                System.out.println(e.toString());
+                System.err.println(e.toString());
                 return null;
             }
         }
 
         try {
             if ( !out.createNewFile() ) { // failure in creating file
-                System.out.println("Failed to create file for " + path);
+                System.err.println("Failed to create file for " + path);
                 return null;
             }
         }
         catch ( Throwable t ) {
-            System.out.println(t.toString());
+            System.err.println(t.toString());
             return null;
         }
 
@@ -1285,7 +1285,7 @@ public class EgaAPIWrapper {
             return fos;
         }
         catch ( Throwable t ) {
-            System.out.println(t.toString());
+            System.err.println(t.toString());
         }
 
         return null;
@@ -1311,9 +1311,9 @@ public class EgaAPIWrapper {
 
             log_error_if_verbose(x.urlConn.getResponseMessage());
         } catch (SocketTimeoutException ex) {
-            System.out.println(ex.toString());
+            System.err.println(ex.toString());
         } catch (IOException ex) {
-            System.out.println(ex.toString());
+            System.err.println(ex.toString());
         }
 
         if ( x.urlConn != null ) {
@@ -1349,7 +1349,7 @@ public class EgaAPIWrapper {
                     } catch (Throwable t) {
                         String error = t.getMessage();
                         if (error.contains("[429] Too Many Requests") && throtteling-->0) { // If 429 is returned, allow for more re-tries
-                            System.out.println("Server responds 'Too Many Requests'. Waiting a few seconds before re-trying.");
+                            System.err.println("Server responds 'Too Many Requests'. Waiting a few seconds before re-trying.");
                             this.lastRestCall = System.currentTimeMillis();
                             countdown++; // Don't count throtteling as 'attempt'
                             wait(15000);
@@ -1369,7 +1369,7 @@ public class EgaAPIWrapper {
                             }
                             errorCondition = false;
                         } catch (Throwable th) {
-                            System.out.println("Delete REST Error: " + th.getMessage());
+                            System.err.println("Delete REST Error: " + th.getMessage());
                             errorCondition = true;
                         }
                     }
@@ -1434,15 +1434,15 @@ public class EgaAPIWrapper {
                                     Thread.sleep(8000);
                                 }
                             } catch (Throwable th) {
-                                System.out.println("Delete REST Error: " + th.getMessage());
+                                System.err.println("Delete REST Error: " + th.getMessage());
                                 errorCondition = true;
                             }
                         }
                     } catch (Throwable th) {
-                        System.out.println("Error:: " + th.getMessage());
+                        System.err.println("Error:: " + th.getMessage());
                         if (json1!=null) {
                             JSONObject jobj = (JSONObject) json1.get("header");
-                            System.out.println(jobj.toString());
+                            System.err.println(jobj.toString());
                             code = jobj.getString("code");
                         }
                     }
@@ -1579,12 +1579,12 @@ public class EgaAPIWrapper {
                 String errorStack = jobjheader.getString("errorStack");
                 
                 if (errorStack!=null && errorStack.length() > 0) {
-                    System.out.println("Service responds with error message: " + errorStack);
+                    System.err.println("Service responds with error message: " + errorStack);
                     result = true;
                 }
             }
         } catch (Exception ex) {
-            System.out.println("Error: " + ex.getLocalizedMessage());
+            System.err.println("Error: " + ex.getLocalizedMessage());
         }
         
         return result;
@@ -1626,8 +1626,8 @@ public class EgaAPIWrapper {
                 } else if (jsn!=null && formname!=null && formname.length()>0) { // Form Data and Form Name provided
                     json = r.json(sURL, form( data(formname, content(jsn)) )); // Uses Timout Class
                 } else { // Not enough information provided to make a REST call
-                    System.out.println(" -- Unexpected Error!");
-                    System.out.println(" -- URL: " + sURL);
+                    System.err.println(" -- Unexpected Error!");
+                    System.err.println(" -- URL: " + sURL);
                     return json;
                 }
                 Object get = json.get("header"); // Minimal Error Check: verify there's a header
@@ -1639,7 +1639,7 @@ public class EgaAPIWrapper {
                     continue;
                 }
                 if (code.equals("401")) { // Server Session Lost - re-login
-                    //System.out.println("Access not permitted.");
+                    //System.err.println("Access not permitted.");
                     json = new JSONResource();
                     return json;
                 }
@@ -1648,7 +1648,7 @@ public class EgaAPIWrapper {
             } catch (Exception ex) {
                 String error = ex.getMessage();
                 if (error.contains("[429] Too Many Requests") && throtteling-->0) { // If 429 is returned, allow for more re-tries
-                    System.out.println("Server responds 'Too Many Requests'. Waiting a few seconds before re-trying.");
+                    System.err.println("Server responds 'Too Many Requests'. Waiting a few seconds before re-trying.");
                     this.lastRestCall = System.currentTimeMillis();
                     countdown++; // Don't count throtteling as 'attempt'
                     wait(wait*10);
@@ -1683,12 +1683,12 @@ public class EgaAPIWrapper {
                                 continue; // directly restart loop
                             } 
                             else { // If timeout has occurred - log out
-                                System.out.println("(restCall) Session Time Out!");
+                                System.err.println("(restCall) Session Time Out!");
                                 this.logout();
                                 timeoutError = true;
                             }
                         } else if (!code.equals("200")) { // All Other errors...
-                            System.out.println("Error! " + code + "\t" + header.toString());
+                            System.err.println("Error! " + code + "\t" + header.toString());
                         }
                     }
                     loginError = false;
@@ -1702,12 +1702,12 @@ public class EgaAPIWrapper {
             
             // Handle Error Conditions (Throtteling; Server session Issues)
             if (errorCondition && !timeout && countdown==0) { // Looks like 
-                System.out.println("Server error. Refreshing Session!");
+                System.err.println("Server error. Refreshing Session!");
                 this.logout();
                 this.login(this.u, this.p);
                 errorCondition = true;
             } else if (timeout) { // Timeout condition
-                System.out.println("(restCall) Session Time Out!");
+                System.err.println("(restCall) Session Time Out!");
                 this.logout();
                 timeoutError = true;
             } else { // Wohoo! No Error!
@@ -1785,7 +1785,7 @@ public class EgaAPIWrapper {
                 }
                 if (!success) Thread.sleep(467);
             }
-        } catch (Throwable t) {System.out.println("Error: " + t.getMessage());}
+        } catch (Throwable t) {System.err.println("Error: " + t.getMessage());}
         
         return jsonarr;
     }
