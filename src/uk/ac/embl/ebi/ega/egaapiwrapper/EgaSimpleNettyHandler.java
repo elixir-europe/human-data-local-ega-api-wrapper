@@ -122,7 +122,9 @@ public class EgaSimpleNettyHandler extends SimpleChannelInboundHandler<HttpObjec
                 // Nothing to do
                 if (verbose) System.out.println("Download to NULL");
             }
-        } catch (Throwable th) {;}
+        } catch (Throwable th) {
+            System.err.println(th.toString());
+        }
         
         this.ticket = ticket;
         this.org = org;
@@ -131,7 +133,9 @@ public class EgaSimpleNettyHandler extends SimpleChannelInboundHandler<HttpObjec
         this.PORT = PORT;
         try {
             this.md = MessageDigest.getInstance("MD5");
-        } catch (NoSuchAlgorithmException ex) {;}
+        } catch (NoSuchAlgorithmException ex) {
+            System.err.println(ex.toString());
+        }
         if (verbose) System.out.println("Handler for ticket " + this.ticket + " set up! (Saving to: " + this.down_path + ")");
     }
 
@@ -287,6 +291,7 @@ public class EgaSimpleNettyHandler extends SimpleChannelInboundHandler<HttpObjec
             this.close(ctx, new DefaultChannelPromise(ctx.channel()));
         } catch (Exception ex) {
             Logger.getLogger(EgaSimpleNettyHandler.class.getName()).log(Level.SEVERE, null, ex);
+            System.err.println(ex.toString());
         }
         this.theTimer.cancel();
         this.theTimer = null;
@@ -312,6 +317,7 @@ public class EgaSimpleNettyHandler extends SimpleChannelInboundHandler<HttpObjec
                 errorCondition = false;
             } catch (IOException ex) {
                 Logger.getLogger(EgaAPIWrapper.class.getName()).log(Level.SEVERE, null, ex);
+                System.err.println(ex.toString());
             }
             
             // test that there is a result
@@ -329,7 +335,9 @@ public class EgaSimpleNettyHandler extends SimpleChannelInboundHandler<HttpObjec
                 long y = Math.abs(x.nextInt(4000));
                 try {
                     Thread.sleep( (y>4000?4000:y) );
-                } catch (InterruptedException ex) {;}
+                } catch (InterruptedException ex) {
+                    System.err.println(ex.toString());
+                }
             }
         }
         
