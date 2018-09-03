@@ -206,7 +206,7 @@ public class EgaAPIWrapper {
                 }
             }
         } catch (Exception e) {
-            //e.printStackTrace();
+            System.err.println(e.toString());
         }
         return res;
     }
@@ -244,6 +244,7 @@ public class EgaAPIWrapper {
 
             } catch (Exception ex) {
                 this.session = false;
+                System.err.println(ex.toString());
             }
         //}
         
@@ -274,6 +275,7 @@ public class EgaAPIWrapper {
             }
         } catch (Exception ex) {
             this.session = false;
+            System.err.println(ex.toString());
         }
         
         return this.session;
@@ -300,7 +302,7 @@ public class EgaAPIWrapper {
             } catch (Exception ex) {
                 this.session = false;
                 this.sessionId = null;
-                if (verbose) System.err.println("Exception: " + ex.toString());
+                System.err.println("Exception: " + ex.toString());
             }
         }
     }
@@ -351,6 +353,7 @@ public class EgaAPIWrapper {
             this.globusUser = username;
         } catch (Exception ex) {
             this.globusToken = null;
+            System.err.println(ex.toString());
         }
         return (this.globusToken != null && this.globusToken.length() > 0);
     }
@@ -374,6 +377,7 @@ public class EgaAPIWrapper {
             token = json.get("access_token").toString();
         } catch (Exception ex) {
             Logger.getLogger(EgaAPIWrapper.class.getName()).log(Level.SEVERE, null, ex);
+            System.err.println(ex.toString());
         }
                 
         return token;
@@ -574,7 +578,9 @@ public class EgaAPIWrapper {
                     //this.session = false;
                     result = null;
                 }
-            } catch (Exception ex) {;}
+            } catch (Exception ex) {
+                System.err.println(ex.toString());
+            }
 
             //if (result!=null)
             //    Arrays.sort(result);       
@@ -617,7 +623,9 @@ public class EgaAPIWrapper {
                     result = null;
                 }
 
-            } catch (Exception ex) {;}
+            } catch (Exception ex) {
+                System.err.println(ex.toString());
+            }
         } else
             System.out.println("Please log in.");
         
@@ -662,7 +670,9 @@ public class EgaAPIWrapper {
                         result = null;
                     }
                 }
-            } catch (Exception ex) {;}
+            } catch (Exception ex) {
+                System.err.println(ex.toString());
+            }
 
             //if (result!=null)
             //    Arrays.sort(result);       
@@ -687,7 +697,9 @@ public class EgaAPIWrapper {
                         result[i] = jsonarr.getString(i);
                     }
                 }
-            } catch (Exception ex) {;}
+            } catch (Exception ex) {
+                System.err.println(ex.toString());
+            }
         } else
             System.out.println("Please log in.");
         
@@ -726,7 +738,9 @@ public class EgaAPIWrapper {
                     this.session = false;
                     result = null;
                 }
-            } catch (Exception ex) {;}
+            } catch (Exception ex) {
+                System.err.println(ex.toString());
+            }
 
             //if (result!=null)
             //    Arrays.sort(result);
@@ -767,7 +781,9 @@ public class EgaAPIWrapper {
                     this.session = false;
                     result = null;
                 }
-            } catch (Exception ex) {;}        
+            } catch (Exception ex) {
+                System.err.println(ex.toString());
+            }
         } else
             System.out.println("Please log in.");
         return result;
@@ -863,7 +879,10 @@ public class EgaAPIWrapper {
                             while((bytesRead = ins.read(buffer)) != -1) {
                                 fos.write(buffer, 0, bytesRead);
                             }
-                        } catch (Throwable th) {error = true;}
+                        } catch (Throwable th) {
+                            error = true;
+                            System.err.println(th.toString());
+                        }
                         fos.close();
                     } finally {
                         ins.close();
@@ -874,6 +893,7 @@ public class EgaAPIWrapper {
 
             } catch (IOException ex) {
                 Logger.getLogger(EgaAPIWrapper.class.getName()).log(Level.SEVERE, null, ex);
+                System.err.println(ex.toString());
             }
             if (errorCondition) {
                 Random x = new Random();
@@ -881,7 +901,9 @@ public class EgaAPIWrapper {
                 try {
                     //System.out.println("Wait: " + y + " (" + wait + ") " + url);
                     Thread.sleep( (y>wait?wait:y) );
-                } catch (InterruptedException ex) {;}
+                } catch (InterruptedException ex) {
+                    System.err.println(ex.toString());
+                }
             }
         }
         
@@ -974,7 +996,9 @@ public class EgaAPIWrapper {
             log_output_if_verbose("Shutting down " + (this.udt?"UDT":"TCP") + " Channel ticket " + ticket);
             connectGroup.shutdownGracefully();
             while (!connectGroup.isShutdown()) { // Wait
-                try {Thread.sleep(250);} catch (InterruptedException ex) {;}
+                try {Thread.sleep(250);} catch (InterruptedException ex) {
+                    System.err.println(ex.toString());
+                }
             }
             log_output_if_verbose("Shut down " + (this.udt?"UDT":"TCP") + " Channel ticket " + ticket + " Done!");
         }        
@@ -1380,11 +1404,14 @@ public class EgaAPIWrapper {
                         long y = Math.abs(x.nextInt(4000));
                         try {
                             Thread.sleep( (y>4000?4000:y) );
-                        } catch (InterruptedException ex) {;}
+                        } catch (InterruptedException ex) {
+                            System.err.println(ex.toString());
+                        }
                     }
                 }
             } catch (Exception ex) {
                 Logger.getLogger(EgaAPIWrapper.class.getName()).log(Level.SEVERE, null, ex);
+                System.err.println(ex.toString());
             }
         } else
             System.out.println("Please log in.");
@@ -1455,11 +1482,14 @@ public class EgaAPIWrapper {
                         try {
 //System.out.println("Watiting: " + y + " (" + wait + ")");
                             Thread.sleep( (y>wait?wait:y) );
-                        } catch (InterruptedException ex) {;}
+                        } catch (InterruptedException ex) {
+                            System.err.println(ex.toString());
+                        }
                     }
                 }
             } catch (Exception ex) {
                 Logger.getLogger(EgaAPIWrapper.class.getName()).log(Level.SEVERE, null, ex);
+                System.err.println(ex.toString());
             }
                 
         } else
@@ -1487,7 +1517,9 @@ public class EgaAPIWrapper {
                         ip = ip.substring(0, ip.indexOf(",")-1);
                 }
             }            
-        } catch (Exception ex) {;}
+        } catch (Exception ex) {
+            System.err.println(ex.toString());
+        }
         
         return ip;
     }
@@ -1528,6 +1560,7 @@ public class EgaAPIWrapper {
             destination = dest_file.getCanonicalPath(); // modify passed-in parameter
             if (down_path.endsWith(File.separator)) down_path = down_path.substring(0, down_path.length()-1);
         } catch (Throwable th) {
+            System.err.println(th.toString());
             return;
         }
         
@@ -1557,13 +1590,13 @@ public class EgaAPIWrapper {
                 if (delete) f.delete();
                 
             } catch (IOException ex) {
-                ;
+                System.err.println(ex.toString());
             } finally {
                 try {
                     in.close();
                     out.close();
                 } catch (IOException ex) {
-                    ;
+                    System.err.println(ex.toString());
                 }
             }
         }
@@ -1694,6 +1727,7 @@ public class EgaAPIWrapper {
                     loginError = false;
                 } catch (Throwable t) { // Error - re-login if this persists (unless timeout)
                     errorCondition = true;
+                    System.err.println(t.toString());
                 }
             } else { // If nothing was returned (json==null) - wait and retry
                 wait(wait);                
@@ -1733,7 +1767,9 @@ public class EgaAPIWrapper {
         long y = Math.abs(x.nextInt(wait));
         try {
             Thread.sleep( (y>wait?wait:y) );
-        } catch (InterruptedException ex) {;}
+        } catch (InterruptedException ex) {
+            System.err.println(ex.toString());
+        }
     }
     
     // *************************************************************************
@@ -1741,13 +1777,17 @@ public class EgaAPIWrapper {
     private void handleSessionResponse(JSONResource json) {
         try {
             JSONObject jobj_header = null;
-            try {jobj_header = (JSONObject) json.get("header");} catch (Throwable th) {;}
+            try {jobj_header = (JSONObject) json.get("header");} catch (Throwable th) {
+                System.err.println(th.toString());
+            }
             if (jobj_header!= null && jobj_header.has("code") && jobj_header.getString("code").equals("500") &&
                     jobj_header.getString("errorStack").contains("There is no session with id")) {
                 this.session = false;
                 System.out.println("Please log in again. The previous session has expired.");
             }
-        } catch (JSONException ex) {;}
+        } catch (JSONException ex) {
+            System.err.println(ex.toString());
+        }
     }
     
     // Alternate REST call + re-try function -- should be consolidated into restCall! (TODO)
@@ -1815,6 +1855,7 @@ public class EgaAPIWrapper {
                     } catch (Exception ex) {
                         jsonarr = new JSONArray(new String[]{"Access not Permitted"});
                         unauthorized = true;
+                        System.err.println(ex.toString());
                         break; // bypass error-retry if unauthorized
                     }
                     
@@ -1828,7 +1869,9 @@ public class EgaAPIWrapper {
                 }
                 if (!success && !unauthorized) Thread.sleep(267);
             }
-        } catch (Throwable t) {;}
+        } catch (Throwable t) {
+            System.err.println(t.toString());
+        }
         
         return jsonarr;
     }
